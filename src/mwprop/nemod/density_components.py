@@ -39,7 +39,7 @@ pihalf = np.pi/2.
 sqrt = np.sqrt
 
 @njit
-def _ne_outer_jit(x, y, z, rsun, A1, n1h1, h1, F1, pihalf, sech2_const):
+def _ne_outer_jit(x, y, z, rsun, A1, n1h1, h1, F1, pihalf, sech2_const):  # pragma: no cover
     """JIT-compiled ne_outer core calculation"""
     rr = sqrt(x**2 + y**2)
     suncos = np.cos(pihalf*rsun/A1)
@@ -55,7 +55,7 @@ def _ne_outer_jit(x, y, z, rsun, A1, n1h1, h1, F1, pihalf, sech2_const):
     return ne1, F1
 
 @njit
-def _ne_inner_jit(x, y, z, A2, n2, h2, F2, sech2_const):
+def _ne_inner_jit(x, y, z, A2, n2, h2, F2, sech2_const):  # pragma: no cover
     """JIT-compiled ne_inner core calculation"""
     g2 = 0.
     rr = sqrt(x**2. + y**2.)

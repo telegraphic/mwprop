@@ -60,7 +60,7 @@ except ImportError:
         return decorator
 
 @njit
-def _nevoidN_jit(x, y, z, nvoids, xv, yv, zv, nev, Fv, aav, bbv, ccv,
+def _nevoidN_jit(x, y, z, nvoids, xv, yv, zv, nev, Fv, aav, bbv, ccv,  # pragma: no cover
                  edgev, cc12, s2, cs21, cs12, c2, ss12, s1, c1):
     """JIT-compiled core loop for void calculation"""
     nevN = 0.
