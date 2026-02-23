@@ -61,17 +61,6 @@ basename = sys.argv[0].split('/')[-1].split('.')[0]
 now = datetime.datetime.now()
 plotstamp = basename + '_' + str(now).split('.')[0]
 
-# set which model
-#inpdir = os.path.dirname(os.path.realpath(__file__))+'/params/which_model.inp'
-#which_mod = np.loadtxt(inpdir,dtype=str)
-#if which_mod=='NE2001':
-#	eval_NE2001 = True
-#	eval_NE2025 = False
-#if which_mod=='NE2025':
-#	eval_NE2025 = True
-#	eval_NE2001 = False
-
-#print(eval_NE2025,eval_NE2001)
 
 # ----------------------------------------------------------------------
 
@@ -121,6 +110,7 @@ def dmdsm_dm2d(l, b, dm_target, ds_coarse=0.1, ds_fine=0.01, Nsmin=20,
            dm2d_only True => calculate only the distance; otherwise also calculate SM.
            do_analysis True => analyze components of line of sight: dm, sm, lism, arms
            verbose   prints a few diagnostics
+           model     one of 'ne2001' or 'ne2025'
 
     Output:
            limit  (set to '>' if only a lower distance limit can be
@@ -454,6 +444,7 @@ def dmdsm_d2dm(l, b, d_target, ds_coarse, ds_fine, Nsmin,
            do_analysis True => analyze components of line of sight: dm, lism, arms (sm)
            plotting  True => plot dm etc vs distance along path
            verbose   N/A presently
+           model     One of 'ne2001' or 'ne2025'
 
     Output:
            dist          calculated distance or input distance
@@ -1106,6 +1097,8 @@ def plot_dm_along_LoS(
             savedir = os.getcwd()+'/output_ne2001p/'
         elif eval_NE2025:
             savedir = os.getcwd()+'/output_ne2025p/'
+
+        os.makedirs(savedir, exist_ok=True)
 
         if saveplot:
             #plotfile = 'dm_vs_d_' + basename + '.pdf'
