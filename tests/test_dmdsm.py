@@ -5,7 +5,7 @@ Based on the original __main__ code
 import pytest
 import numpy as np
 from numpy import deg2rad, rad2deg
-from mwprop.nemod.dmdsm import dmdsm_dm2d
+from mwprop.nemod.dmdsm import dmdsm_dm2d, dmdsm_d2dm
 
 
 DM2D_ONLY_DATASETS = [
@@ -206,3 +206,53 @@ def test_dmdsm_full_outputs_expected():
     assert smtau == pytest.approx(FULL_OUTPUT_DATASET["smtau"], rel=1e-4, abs=1e-6)
     assert smtheta == pytest.approx(FULL_OUTPUT_DATASET["smtheta"], rel=1e-4, abs=1e-6)
     assert smiso == pytest.approx(FULL_OUTPUT_DATASET["smiso"], rel=1e-4, abs=1e-6)
+
+
+def test_dmdsm_d2dm_only_expected():
+    """Covers d2dm_only=True branch in dmdsm_d2dm."""
+    l = deg2rad(30.0)
+    b = deg2rad(0.0)
+
+    limit, d_out, dm_out = dmdsm_d2dm(
+        l,
+        b,
+        2.5,
+        ds_coarse=0.2,
+        ds_fine=0.05,
+        Nsmin=20,
+        d2dm_only=True,
+        do_analysis=False,
+        plotting=False,
+        verbose=False,
+    )
+
+    assert limit == " "
+    assert d_out == pytest.approx(2.5)
+    assert dm_out == pytest.approx(76.32567376508588, rel=1e-12, abs=1e-12)
+
+
+def test_dmdsm_d2dm_full_expected():
+    """Covers d2dm_only=False branch in dmdsm_d2dm."""
+    l = deg2rad(30.0)
+    b = deg2rad(0.0)
+
+    limit, d_out, dm_out, sm, smtau, smtheta, smiso = dmdsm_d2dm(
+        l,
+        b,
+        2.5,
+        ds_coarse=0.2,
+        ds_fine=0.05,
+        Nsmin=20,
+        d2dm_only=False,
+        do_analysis=False,
+        plotting=False,
+        verbose=False,
+    )
+
+    assert limit == " "
+    assert d_out == pytest.approx(2.5)
+    assert dm_out == pytest.approx(76.32567376508588, rel=1e-12, abs=1e-12)
+    assert sm == pytest.approx(0.03637586630763256, rel=1e-12, abs=1e-12)
+    assert smtau == pytest.approx(0.024011327959735037, rel=1e-12, abs=1e-12)
+    assert smtheta == pytest.approx(0.003986103883985816, rel=1e-12, abs=1e-12)
+    assert smiso == pytest.approx(0.13014730079324685, rel=1e-12, abs=1e-12)
