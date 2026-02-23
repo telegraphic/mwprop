@@ -1,10 +1,10 @@
 # mwprop v2.0 Jan 2026
 
 '''
-Python version of subroutine nevoidN.f in NE2001 Fortran code 
+Python version of subroutine nevoidN.f in NE2001 Fortran code
 
-Returns electron density nevN and fluctuation parameter FvN 
-at position designated by l,b,d,x,y,z c for a set of  
+Returns electron density nevN and fluctuation parameter FvN
+at position designated by l,b,d,x,y,z c for a set of
 voids with parameters read in from file  nevoidN.dat
 
 input:
@@ -15,7 +15,7 @@ output:
     FvN fluctuation parameter
     hitvoid =   0:     no void hit
                 j>0:   j-th void hit
-    wvoid = 0,1:     void weight    
+    wvoid = 0,1:     void weight
 
 parameters:
     lv  = galactic longitude of void center
@@ -33,7 +33,7 @@ parameters:
                  1 => uniform and truncated at 1/e
 Version history:
 
-01/20/20 Stella Koch Ocker 
+01/20/20 Stella Koch Ocker
     * initial conversion f77 --> python
 01/23/20 -- now reads input parameters from dictionary program ne2001p_input
 02/08/20 -- JMC
@@ -46,6 +46,48 @@ Version history:
 '''
 
 from mwprop.nemod.config_nemod import *
+import numpy as np
+
+try:
+    from numba import njit
+    HAS_NUMBA = True
+except ImportError:
+    HAS_NUMBA = False
+    def njit(*args, **kwargs):
+        """Dummy decorator when numba unavailable"""
+        def decorator(func):
+            return func
+        return decorator
+
+@njit
+def _nevoidN_jit(x, y, z, nvoids, xv, yv, zv, nev, Fv, aav, bbv, ccv,  # pragma: no cover
+                 edgev, cc12, s2, cs21, cs12, c2, ss12, s1, c1):
+    """JIT-compiled core loop for void calculation"""
+    nevN = 0.
+    FvN = 0.
+    hitvoid = 0
+    wvoid = 0
+
+    for j in range(nvoids):
+        dx = x - xv[j]
+        dy = y - yv[j]
+        dz = z - zv[j]
+        q = ((cc12[j]*dx + s2[j]*dy + cs21[j]*dz)**2. / aav[j]**2. +
+             (-cs12[j]*dx + c2[j]*dy - ss12[j]*dz)**2. / bbv[j]**2. +
+             (-s1[j]*dx + c1[j]*dz)**2. / ccv[j]**2.)
+        if edgev[j] == 0. and q < 3.:
+            nevN = nev[j] * np.exp(-q)
+            FvN = Fv[j]
+            hitvoid = j+1
+        if edgev[j] == 1. and q <= 1.:
+            nevN = nev[j]
+            FvN = Fv[j]
+            hitvoid = j+1
+
+    if hitvoid != 0:
+        wvoid = 1
+
+    return nevN, FvN, hitvoid, wvoid
 
 def nevoidN(x,y,z):
 
@@ -54,48 +96,9 @@ def nevoidN(x,y,z):
     hitvoid = 0
     wvoid = 0
 
-    '''
-    note rotation matrix in the 'q = ' statement below
-    corresponds to \Lambda_z\Lambda_y
-    where \Lambda_y = rotation around y axis
-        \Lambda_z = rotation around z axis
-    defined as
-        \Lambda_y =  c1  0  s1
-                     0  1   0
-                    -s1  0  c1
+    if nvoids == 0:
+        return nevN, FvN, hitvoid, wvoid
 
-        \Lambda_z =  c2 s2   0
-                    -s2 c2   0
-                    0  0   1
-        =>
-        \Lambda_z\Lambda_y =  c1*c2   s2   s1*c2
-                            -s2*c1   c2  -s1*s2
-                            -s1    0      c1
-    so the rotation is around the y axis first, then the z axis
-    '''
-
-    for j in range(nvoids):
-        dx = x-xv[j]
-        dy = y-yv[j]
-        dz = z-zv[j]
-        q = (cc12[j]*dx + s2[j]*dy + cs21[j]*dz)**2. / aav[j]**2. + (-cs12[j]*dx + c2[j]*dy - ss12[j]*dz)**2. / bbv[j]**2. + (-s1[j]*dx + c1[j]*dz)**2. / ccv[j]**2.
-        if edgev[j] == 0. and q < 3.: # note this doesn't actually get used in NE2001; no clumps with edge = 0
-            nevN = nev[j] * exp(-q)
-            FvN = Fv[j]
-            hitvoid = j+1
-            #hitvoidflag[j] = 1
-            #print('x,y,z,nev',x,y,z,nevN)
-        if edgev[j] == 1. and q <= 1.:
-            #print('void no.', j,'q', q)
-            nevN = nev[j]
-            FvN = Fv[j]
-            hitvoid = j+1 # 3/6/22 -- SKO changed this from hitvoid = j --- j = 0 for Gum edge, which means it doesn't get counted
-            #hitvoidflag[j] = 1
-            #print('x,y,z,nev',x,y,z,nevN)
-
-    
-    if hitvoid != 0:
-        wvoid = 1
-    
-    #print(hitvoid,wvoid)  
-    return nevN, FvN, hitvoid, wvoid
+    # Call JIT-compiled core loop
+    return _nevoidN_jit(x, y, z, nvoids, xv, yv, zv, nev, Fv, aav, bbv, ccv,
+                        edgev, cc12, s2, cs21, cs12, c2, ss12, s1, c1)
