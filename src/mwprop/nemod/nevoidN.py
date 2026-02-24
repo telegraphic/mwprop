@@ -47,17 +47,7 @@ Version history:
 
 from mwprop.nemod.config_nemod import *
 import numpy as np
-
-try:
-    from numba import njit
-    HAS_NUMBA = True
-except ImportError:
-    HAS_NUMBA = False
-    def njit(*args, **kwargs):
-        """Dummy decorator when numba unavailable"""
-        def decorator(func):
-            return func
-        return decorator
+from mwprop.nemod.numba_compat import njit, HAS_NUMBA
 
 @njit
 def _nevoidN_jit(x, y, z, nvoids, xv, yv, zv, nev, Fv, aav, bbv, ccv,  # pragma: no cover

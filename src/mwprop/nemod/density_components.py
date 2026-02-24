@@ -23,17 +23,7 @@ import numpy as np
 
 # nemod_config sets up the model with all dictionaries etc.
 from mwprop.nemod.config_nemod import *
-
-try:
-    from numba import njit
-    HAS_NUMBA = True
-except ImportError:
-    HAS_NUMBA = False
-    def njit(*args, **kwargs):
-        """Dummy decorator when numba unavailable"""
-        def decorator(func):
-            return func
-        return decorator
+from mwprop.nemod.numba_compat import njit, HAS_NUMBA
 
 pihalf = np.pi/2.
 sqrt = np.sqrt
