@@ -30,7 +30,7 @@ Executable scripts `NE2025p`, `NE2001p`, `los_diagnostics`, and `test_NE2025p` a
 - matplotlib
 - scipy
 - astropy
-- mpmath
+- numba
 
 -----
 
