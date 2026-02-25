@@ -11,13 +11,17 @@ Version history:
 02/08/20 --- JMC
      * removed rsun = 8.5
      * all model parameters now imported from config_ne2001p
+2026 Feb --- DCP
+     * Modified to use GalaxyModel class with pre-instantiated attributes
 """
 
 from mwprop.nemod.config_nemod import *
+from mwprop.nemod.galaxy_model import default_model
 
 script_path = os.path.dirname(os.path.realpath(__file__))
 
-def ne_arms_ne2001p(x,y,z, Ncoarse=20, dthfine=0.01, nfinespline=5, verbose=False):
+def ne_arms_ne2001p(x, y, z, Ncoarse=20, dthfine=0.01, nfinespline=5,
+                    verbose=False, model=None):
     """
     Evaluates electron density and F parameter for arm nearest to x,y,z
 
@@ -27,16 +31,19 @@ def ne_arms_ne2001p(x,y,z, Ncoarse=20, dthfine=0.01, nfinespline=5, verbose=Fals
         dthfine = step size in Galactocentric angle for fine sampling (rad)
         nfinespline = number of coarse samples to use for fine-sampling spline
         verbose = True:  writes out n_e component information
+        model   = GalaxyModel instance (uses module-level default_model if None)
 
     Output:
         ne        electron density        cm^{-3}
         F         F parameter             composite units
         whicharm  which spiral arms       1 to 5, no close arm ==> 0
     """
+    if model is None:
+        model = default_model
 
     # First find coarse location of points on arms nearest to input point
 
-    narms = np.shape(coarse_arms)[1]
+    narms = model.narms
     dsq_coarse = (coarse_arms[0] - x)**2 + (coarse_arms[1] - y)**2
     index_dsqmin = np.argmin(dsq_coarse, axis=1)
 
@@ -59,16 +66,11 @@ def ne_arms_ne2001p(x,y,z, Ncoarse=20, dthfine=0.01, nfinespline=5, verbose=Fals
     if thxydeg < 0:
         thxydeg += 360
 
-    # Cache model parameters to avoid repeated dict lookups in the loop
-    Dgal_wa = Dgal['wa']
-    Dgal_Aa = Dgal['Aa']
-    Dgal_ha = Dgal['ha']
-    Dgal_Fa = Dgal['Fa']
-
-    arm_index = np.fromiter((Darmmap[str(j)] for j in range(narms)), dtype=int)
-    warm = np.array([Dgal['warm'+str(jj)] for jj in arm_index])
-    harm = np.array([Dgal['harm'+str(jj)] for jj in arm_index])
-    narm = np.array([Dgal['narm'+str(jj)] for jj in arm_index])
+    # Use pre-computed model attributes instead of per-call dict lookups:
+    arm_index = model.arm_index
+    warm      = model.warm
+    harm      = model.harm
+    narm      = model.narm
 
     if verbose:
         print('arms rr, thxydeg: ', rr, thxydeg)
@@ -83,12 +85,8 @@ def ne_arms_ne2001p(x,y,z, Ncoarse=20, dthfine=0.01, nfinespline=5, verbose=Fals
         thjfine = np.arange(th1[j, ind1[0]], th1[j, ind1[-1]], dthfine)
         ind_min = dsqs(thjfine).argmin()
         thjmin = thjfine[ind_min]
-        # Use precomputed spiral arm spline when available to avoid per-call setup cost
-        if 'armsplines' in globals() and len(armsplines) > j:
-            sj = armsplines[j]
-        else:
-            sj = CubicSpline(th1[j,:], r1[j,:])
-        rjmin = sj(thjmin)
+        # Use pre-computed arm radius spline from model — no per-call CubicSpline
+        rjmin = model.arm_radius_splines[j](thjmin)
         xjmin, yjmin = -rjmin*np.sin(thjmin), rjmin*np.cos(thjmin)
 
         # Evaluate electron density for nearest spiral arm if it is within
@@ -96,7 +94,7 @@ def ne_arms_ne2001p(x,y,z, Ncoarse=20, dthfine=0.01, nfinespline=5, verbose=Fals
 
         dmin = sqrt((x-xjmin)**2 + (y-yjmin)**2)
         jj = arm_index[j]
-        wa = Dgal_wa
+        wa = model.wa
 
         """
         Note armmap used here is to maintain the legacy arm numbering
@@ -117,10 +115,10 @@ def ne_arms_ne2001p(x,y,z, Ncoarse=20, dthfine=0.01, nfinespline=5, verbose=Fals
             ga = np.exp(-argxy**2)
 
             # Galactocentric radial factor:
-            if rr > Dgal_Aa: ga *= sech2((rr-Dgal_Aa)/2.)
+            if rr > model.Aa: ga *= sech2((rr-model.Aa)/2.)
 
             # z factor:
-            Ha = Dgal_ha * harm[j]
+            Ha = model.ha * harm[j]
             ga *= sech2(z/Ha)
 
             # Amplitude re-scalings as in NE2001 code;
@@ -149,7 +147,7 @@ def ne_arms_ne2001p(x,y,z, Ncoarse=20, dthfine=0.01, nfinespline=5, verbose=Fals
                     # fac = 1    # TEMP
                     ga *= fac
 
-            nea += ga * narm[j] * Dgal['na']
+            nea += ga * narm[j] * model.na
             s = sqrt(x**2 + (rsun-y)**2)
             #s = sqrt(x**2 + (8.5-y)**2)
             if verbose:
@@ -177,7 +175,7 @@ def ne_arms_ne2001p(x,y,z, Ncoarse=20, dthfine=0.01, nfinespline=5, verbose=Fals
         # For now, maintain this error in the Python code because the aim here
         # is to replicate the Fortran code:
 
-        Farm = Dgal_Fa
+        Farm = model.Fa
 
         # The question is then whether the error was in the code when fitting
         # was done to find the best values of farm_j?   I think the error was

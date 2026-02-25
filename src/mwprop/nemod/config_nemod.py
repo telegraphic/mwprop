@@ -688,3 +688,11 @@ def _refresh_dependent_modules():
         module = sys.modules.get(name)
         if module is not None:
             importlib.reload(module)
+
+    # Refresh the GalaxyModel singleton so pre-computed arm arrays / splines
+    # stay in sync with the newly loaded model parameters.
+    # Lazy import prevents a circular dependency at module-load time
+    # (config_nemod must not import galaxy_model at the module level).
+    _gm = sys.modules.get('mwprop.nemod.galaxy_model')
+    if _gm is not None:
+        _gm.default_model.refresh()

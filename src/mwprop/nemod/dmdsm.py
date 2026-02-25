@@ -38,7 +38,7 @@ else:
 from numpy import log10
 from numpy import array, linspace, where, size
 from numpy import digitize, interp
-from scipy.interpolate import interp1d
+from scipy.interpolate import CubicSpline
 from scipy.integrate import cumulative_trapezoid
 
 from mwprop.nemod.config_nemod import *
