@@ -183,6 +183,7 @@ def dmdsm_dm2d(l, b, dm_target, ds_coarse=0.1, ds_fine=0.01, Nsmin=20,
 
         sc_vec, xc_vec, yc_vec, zc_vec = calc_galcentric_vecs(l, b, dmax_integrate, Ns_coarse)
         sf_vec, xf_vec, yf_vec, zf_vec = calc_galcentric_vecs(l, b, dmax_integrate, Ns_fine)
+        ds_fine_step = sf_vec[1] - sf_vec[0]   # uniform linspace step — avoids diff() inside cumulative_trapezoid
 
         # Obtain electron density components, F parameters, weights, etc.
         # Use separate calls to density_2001_smooth_comps and density_2001_smallscale_comps
@@ -253,7 +254,7 @@ def dmdsm_dm2d(l, b, dm_target, ds_coarse=0.1, ds_fine=0.01, Nsmin=20,
         #if np.count_nonzero(wgcN*necN)!=0:
         	#print('Warning: Clump(s) intersected. Run los_diagnostics.py for details.')
 
-        dm_cumulate_vec = pc_in_kpc * cumulative_trapezoid(ne, sf_vec, initial=0.0)
+        dm_cumulate_vec = pc_in_kpc * cumulative_trapezoid(ne, dx=ds_fine_step, initial=0.0)
         dm_calc_max = dm_cumulate_vec[-1]       # maximum dm calculated for this pass
 
         # Interpolate to get distance estimate:
@@ -365,10 +366,11 @@ def dmdsm_dm2d(l, b, dm_target, ds_coarse=0.1, ds_fine=0.01, Nsmin=20,
         # First integrate over sf_vec then use cubic spline to find SM at d = dhat.
 
         Nsf1 = np.size(sf_vec) + 1
-        dsm_cumulate1_vec = cumulative_trapezoid(dsm, sf_vec, initial=0.0)
-        dsm_cumulate2_vec = cumulative_trapezoid(sf_vec * dsm, sf_vec, initial=0.0)
-        dsm_cumulate3_vec = cumulative_trapezoid(sf_vec**2 * dsm, sf_vec, initial=0.0)
-        dsm_cumulate4_vec = cumulative_trapezoid(sf_vec**sm_iso_index * dsm, sf_vec, initial=0.0)
+        ds = sf_vec[1] - sf_vec[0]   # scalar step for uniform grid
+        dsm_cumulate1_vec = cumulative_trapezoid(dsm, dx=ds, initial=0.0)
+        dsm_cumulate2_vec = cumulative_trapezoid(sf_vec * dsm, dx=ds, initial=0.0)
+        dsm_cumulate3_vec = cumulative_trapezoid(sf_vec**2 * dsm, dx=ds, initial=0.0)
+        dsm_cumulate4_vec = cumulative_trapezoid(sf_vec**sm_iso_index * dsm, dx=ds, initial=0.0)
 
         sm_cumulate = sm_factor * dsm_cumulate1_vec
         smtau_cumulate = 6 * (sm_factor/dhat) * (dsm_cumulate2_vec - dsm_cumulate3_vec/dhat)
@@ -480,6 +482,7 @@ def dmdsm_d2dm(l, b, d_target, ds_coarse, ds_fine, Nsmin,
 
     sc_vec, xc_vec, yc_vec, zc_vec = calc_galcentric_vecs(l, b, d_target, Ns_coarse)
     sf_vec, xf_vec, yf_vec, zf_vec = calc_galcentric_vecs(l, b, d_target, Ns_fine)
+    ds_fine_step = sf_vec[1] - sf_vec[0]   # uniform linspace step — avoids diff() inside cumulative_trapezoid
 
     # ---------------------------------------------
     # Smooth, large-scale components on coarse grid
@@ -518,7 +521,7 @@ def dmdsm_d2dm(l, b, d_target, ds_coarse, ds_fine, Nsmin,
     ne_ex_clumps_voids = (1.-wglism*wlism) * (ne_smooth + wggc*negc) + wglism*wlism*nelism
     ne = (1-wgvN*wvoid)*ne_ex_clumps_voids  + wgvN*wvoid*nevN + wgcN*necN
 
-    dm_cumulate_vec = pc_in_kpc * cumulative_trapezoid(ne, sf_vec, initial=0.0)
+    dm_cumulate_vec = pc_in_kpc * cumulative_trapezoid(ne, dx=ds_fine_step, initial=0.0)
     dm_calc_max = dm_cumulate_vec[-1]
 
     # floats -> ints:
@@ -585,10 +588,10 @@ def dmdsm_d2dm(l, b, d_target, ds_coarse, ds_fine, Nsmin,
         # Accomplish this by integrating over full svec used
         # and then use cubic spline to find SM at d = dhat:.
 
-        dsm_cumulate1_vec = cumulative_trapezoid(dsm, sf_vec, initial=0.0)
-        dsm_cumulate2_vec = cumulative_trapezoid(sf_vec * dsm, sf_vec, initial=0.0)
-        dsm_cumulate3_vec = cumulative_trapezoid(sf_vec**2 * dsm, sf_vec, initial=0.0)
-        dsm_cumulate4_vec = cumulative_trapezoid(sf_vec**sm_iso_index * dsm, sf_vec, initial=0.0)
+        dsm_cumulate1_vec = cumulative_trapezoid(dsm, dx=ds_fine_step, initial=0.0)
+        dsm_cumulate2_vec = cumulative_trapezoid(sf_vec * dsm, dx=ds_fine_step, initial=0.0)
+        dsm_cumulate3_vec = cumulative_trapezoid(sf_vec**2 * dsm, dx=ds_fine_step, initial=0.0)
+        dsm_cumulate4_vec = cumulative_trapezoid(sf_vec**sm_iso_index * dsm, dx=ds_fine_step, initial=0.0)
 
         # sm quantities have proper SM units:
 
@@ -719,13 +722,14 @@ def analysis_dmd_dm_only(f24, f25,
         ddmcN = wgcN*necN * 1000
         ddmvN = wgvN*wvoid*nevN * 1000
 
-        dm1run = cumulative_trapezoid(ddm1, sf_vec, initial=0.0)
-        dm2run = cumulative_trapezoid(ddm2, sf_vec, initial=0.0)
-        dmarun = cumulative_trapezoid(ddma, sf_vec, initial=0.0)
-        dmgcrun = cumulative_trapezoid(ddmgc, sf_vec, initial=0.0)
-        dmlismrun = cumulative_trapezoid(ddmlism, sf_vec, initial=0.0)
-        dmcNrun = cumulative_trapezoid(ddmcN, sf_vec, initial=0.0)
-        dmvNrun = cumulative_trapezoid(ddmvN, sf_vec, initial=0.0)
+        ds = sf_vec[1] - sf_vec[0]   # scalar step for uniform grid
+        dm1run = cumulative_trapezoid(ddm1, dx=ds, initial=0.0)
+        dm2run = cumulative_trapezoid(ddm2, dx=ds, initial=0.0)
+        dmarun = cumulative_trapezoid(ddma, dx=ds, initial=0.0)
+        dmgcrun = cumulative_trapezoid(ddmgc, dx=ds, initial=0.0)
+        dmlismrun = cumulative_trapezoid(ddmlism, dx=ds, initial=0.0)
+        dmcNrun = cumulative_trapezoid(ddmcN, dx=ds, initial=0.0)
+        dmvNrun = cumulative_trapezoid(ddmvN, dx=ds, initial=0.0)
 
         cs_dm1 = CubicSpline(sf_vec, dm1run)
         cs_dm2 = CubicSpline(sf_vec, dm2run)
@@ -904,13 +908,14 @@ def analysis_dmd_dm_and_sm(f24, f25,
     ddmvN = wgvN*wvoid*nevN * 1000
 
     # cumulative integrals of n_e components:
-    dm1run = cumulative_trapezoid(ddm1, sf_vec, initial=0.0)
-    dm2run = cumulative_trapezoid(ddm2, sf_vec, initial=0.0)
-    dmarun = cumulative_trapezoid(ddma, sf_vec, initial=0.0)
-    dmgcrun = cumulative_trapezoid(ddmgc, sf_vec, initial=0.0)
-    dmlismrun = cumulative_trapezoid(ddmlism, sf_vec, initial=0.0)
-    dmcNrun = cumulative_trapezoid(ddmcN, sf_vec, initial=0.0)
-    dmvNrun = cumulative_trapezoid(ddmvN, sf_vec, initial=0.0)
+    ds = sf_vec[1] - sf_vec[0]   # scalar step for uniform grid
+    dm1run = cumulative_trapezoid(ddm1, dx=ds, initial=0.0)
+    dm2run = cumulative_trapezoid(ddm2, dx=ds, initial=0.0)
+    dmarun = cumulative_trapezoid(ddma, dx=ds, initial=0.0)
+    dmgcrun = cumulative_trapezoid(ddmgc, dx=ds, initial=0.0)
+    dmlismrun = cumulative_trapezoid(ddmlism, dx=ds, initial=0.0)
+    dmcNrun = cumulative_trapezoid(ddmcN, dx=ds, initial=0.0)
+    dmvNrun = cumulative_trapezoid(ddmvN, dx=ds, initial=0.0)
 
 
     # spline functions for cumulative DM components:
@@ -942,13 +947,13 @@ def analysis_dmd_dm_and_sm(f24, f25,
     dsma = wtotal*wga*nea**2*Fa
 
     # cumulative integrals of SM components (still divided by sm_factor)
-    sm1run = cumulative_trapezoid(dsm1, sf_vec, initial=0.0)
-    sm2run = cumulative_trapezoid(dsm2, sf_vec, initial=0.0)
-    smarun = cumulative_trapezoid(dsma, sf_vec, initial=0.0)
-    smgcrun = cumulative_trapezoid(dsmgc, sf_vec, initial=0.0)
-    smlismrun = cumulative_trapezoid(dsmlism, sf_vec, initial=0.0)
-    smcNrun = cumulative_trapezoid(dsmcN, sf_vec, initial=0.0)
-    smvNrun = cumulative_trapezoid(dsmvN, sf_vec, initial=0.0)
+    sm1run = cumulative_trapezoid(dsm1, dx=ds, initial=0.0)
+    sm2run = cumulative_trapezoid(dsm2, dx=ds, initial=0.0)
+    smarun = cumulative_trapezoid(dsma, dx=ds, initial=0.0)
+    smgcrun = cumulative_trapezoid(dsmgc, dx=ds, initial=0.0)
+    smlismrun = cumulative_trapezoid(dsmlism, dx=ds, initial=0.0)
+    smcNrun = cumulative_trapezoid(dsmcN, dx=ds, initial=0.0)
+    smvNrun = cumulative_trapezoid(dsmvN, dx=ds, initial=0.0)
 
     # spline functions for cumulative SM components:
     cs_sm1 = CubicSpline(sf_vec, sm1run)
