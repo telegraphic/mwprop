@@ -187,3 +187,145 @@ def ne_arms_ne2001p(x, y, z, Ncoarse=20, dthfine=0.01, nfinespline=5,
             whicharm_spiralmodel, whicharm)
 
     return nea, Farm, whicharm
+
+
+# ---------------------------------------------------------------------------
+
+def ne_arms_ne2001p_vec(xvec, yvec, zvec, Ncoarse=20, dthfine=0.01,
+                        nfinespline=5, model=None):
+    """
+    Vectorized version of ne_arms_ne2001p.
+
+    Accepts 1-D numpy arrays xvec, yvec, zvec (length N) and returns arrays
+    of the same length::
+
+        nea_v, Farm_v, whicharm_v = ne_arms_ne2001p_vec(xvec, yvec, zvec)
+
+    Algorithm
+    ---------
+    The inner CubicSpline refinement step is the same as the scalar version
+    but batched: positions are grouped by their coarse ``index_dsqmin`` value
+    (at most Ncoarse unique groups per arm).  Within each group the same
+    angular nodes ``th_k`` are shared, so scipy's 2-D CubicSpline
+    ``CubicSpline(th_k, dsq_matrix)`` evaluates all positions in the group
+    simultaneously, reducing CubicSpline calls from N*narms to at most
+    Ncoarse*narms (e.g. 100 instead of 2500 for N=500).
+    """
+    if model is None:
+        model = default_model
+
+    N = len(xvec)
+    narms = model.narms
+    nspline2 = int((nfinespline - 1) / 2)
+
+    # dsq_coarse shape: (narms, Ncoarse, N)
+    dsq_coarse = (
+        (coarse_arms[0, :, :, np.newaxis] - xvec[np.newaxis, np.newaxis, :])**2 +
+        (coarse_arms[1, :, :, np.newaxis] - yvec[np.newaxis, np.newaxis, :])**2
+    )
+    # index_dsqmin shape: (narms, N)  — argmin over the Ncoarse axis
+    index_dsqmin = np.argmin(dsq_coarse, axis=1)
+
+    rr      = np.sqrt(xvec**2 + yvec**2)              # (N,)
+    thxydeg = np.rad2deg(np.arctan2(-xvec, yvec))     # (N,)
+    thxydeg = np.where(thxydeg < 0, thxydeg + 360., thxydeg)
+
+    arm_index = model.arm_index
+    warm      = model.warm
+    harm      = model.harm
+    narm      = model.narm
+
+    nea_v               = np.zeros(N)
+    whicharm_spiralmodel_v = np.zeros(N, dtype=int)
+    dmin_min_v          = np.full(N, np.inf)
+
+    for j in range(narms):
+        jj = arm_index[j]
+        Wa = model.wa * warm[j]
+        Ha = model.ha * harm[j]
+
+        # ---- Find thjmin for every position using grouped batch splines ----
+        thjmin_j = np.empty(N)
+
+        for k in np.unique(index_dsqmin[j]):
+            pos_k = np.where(index_dsqmin[j] == k)[0]   # indices into xvec
+            n_k   = pos_k.size
+            ind1  = range(max(0, k - nspline2 - 1),
+                          min(k + nspline2 + 1, Ncoarse), 1)
+            th_k  = th1[j, ind1]                         # (len_ind1,)
+
+            # dsq_k shape: (len_ind1, n_k)
+            dsq_k    = dsq_coarse[j][np.ix_(list(ind1), pos_k)]
+            thjfine  = np.arange(th_k[0], th_k[-1], dthfine)
+
+            if n_k == 1:
+                # Scalar path — identical to the original ne_arms_ne2001p
+                dsqs      = CubicSpline(th_k, dsq_k[:, 0])
+                fine_vals = dsqs(thjfine)                        # (len_fine,)
+                thjmin_j[pos_k[0]] = thjfine[fine_vals.argmin()]
+            else:
+                # Batch path: CubicSpline with 2-D y (columns = positions)
+                dsqs      = CubicSpline(th_k, dsq_k)            # y: (len_ind1, n_k)
+                fine_vals = dsqs(thjfine)                        # (len_fine, n_k)
+                thjmin_j[pos_k] = thjfine[fine_vals.argmin(axis=0)]
+
+        # Arm position and distance at nearest point
+        rjmin_j  = model.arm_radius_splines[j](thjmin_j)        # (N,)
+        xjmin    = -rjmin_j * np.sin(thjmin_j)
+        yjmin    =  rjmin_j * np.cos(thjmin_j)
+        dmin_j   = np.sqrt((xvec - xjmin)**2 + (yvec - yjmin)**2)  # (N,)
+
+        # Initialise dmin_min on first arm (unconditional, mirroring scalar code)
+        if j == 0:
+            dmin_min_v[:] = dmin_j
+
+        in_range = dmin_j < 3. * model.wa    # scalar threshold, same as original
+
+        # Track nearest arm
+        update_which       = in_range & (dmin_j <= dmin_min_v)
+        dmin_min_v         = np.where(update_which, dmin_j, dmin_min_v)
+        whicharm_spiralmodel_v = np.where(update_which, j + 1,
+                                          whicharm_spiralmodel_v)
+
+        # ---- Density factor ga (computed for all positions; masked at accumulation) ----
+        argxy = dmin_j / Wa
+        ga    = np.exp(-argxy**2)
+
+        # Galactocentric radial factor
+        ga = np.where(rr > model.Aa, ga * sech2((rr - model.Aa) / 2.), ga)
+
+        # z factor
+        ga = ga * sech2(zvec / Ha)
+
+        # Arm-specific angular adjustments
+        if jj == 3:   # TC arm 3
+            th3adeg, th3bdeg = 290, 363
+            test3 = thxydeg - th3adeg
+            test3 = np.where(test3 < 0, test3 + 360., test3)
+            fac_cond = (test3 >= 0) & (test3 < th3bdeg - th3adeg)
+            arg_v    = 2. * np.pi * test3 / (th3bdeg - th3adeg)
+            fac      = ((1 + np.cos(arg_v)) / 2)**4
+            ga       = np.where(fac_cond, ga * fac, ga)
+
+        if jj == 2:   # TC arm 2
+            th2adeg, th2bdeg = 340, 370
+            fac2min = 0.1
+            test2   = thxydeg - th2adeg
+            test2   = np.where(test2 < 0, test2 + 360., test2)
+            fac_cond = (test2 >= 0) & (test2 < th2bdeg - th2adeg)
+            arg_v    = 2. * np.pi * test2 / (th2bdeg - th2adeg)
+            fac      = ((1 + fac2min + (1 - fac2min) * np.cos(arg_v)) / 2)**3.5
+            ga       = np.where(fac_cond, ga * fac, ga)
+
+        # Accumulate: only where point is within arm range
+        nea_v = np.where(in_range, nea_v + ga * narm[j] * model.na, nea_v)
+
+    # Map Wainscoat arm index to TC arm numbering (same as scalar Darmmap lookup)
+    arm_tc_map = np.zeros(narms + 1, dtype=int)   # index 0 → whicharm=0 (no arm)
+    for j in range(narms):
+        arm_tc_map[j + 1] = arm_index[j]
+    whicharm_v = arm_tc_map[whicharm_spiralmodel_v]
+
+    Farm_v = np.where(whicharm_spiralmodel_v != 0, model.Fa, 0.)
+
+    return nea_v, Farm_v, whicharm_v

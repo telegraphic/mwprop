@@ -92,3 +92,44 @@ def nevoidN(x,y,z):
     # Call JIT-compiled core loop
     return _nevoidN_jit(x, y, z, nvoids, xv, yv, zv, nev, Fv, aav, bbv, ccv,
                         edgev, cc12, s2, cs21, cs12, c2, ss12, s1, c1)
+
+
+# ---------------------------------------------------------------------------
+
+def nevoidN_vec(x, y, z):
+    """
+    Vectorized (array) version of nevoidN.
+
+    x, y, z are 1-D numpy arrays of positions.
+    Loops over the (few) voids; vectorizes over positions.
+
+    Returns (nevN_v, FvN_v, hitvoid_v, wvoid_v) — all 1-D arrays.
+    """
+    n = len(x)
+    nevN_v    = np.zeros(n)
+    FvN_v     = np.zeros(n)
+    hitvoid_v = np.zeros(n, dtype=int)
+
+    if nvoids == 0:
+        return nevN_v, FvN_v, hitvoid_v, np.zeros(n)
+
+    for j in range(nvoids):
+        dx = x - xv[j]
+        dy = y - yv[j]
+        dz = z - zv[j]
+        q = ((cc12[j]*dx  + s2[j]*dy   + cs21[j]*dz)**2 / aav[j]**2
+           + (-cs12[j]*dx + c2[j]*dy   - ss12[j]*dz)**2 / bbv[j]**2
+           + (-s1[j]*dx                +  c1[j]*dz)**2   / ccv[j]**2)
+        if edgev[j] == 0.:              # Gaussian void
+            mask = q < 3.
+            nevN_v    = np.where(mask, nev[j] * np.exp(-q), nevN_v)
+            FvN_v     = np.where(mask, Fv[j],  FvN_v)
+            hitvoid_v = np.where(mask, j + 1,  hitvoid_v)
+        elif edgev[j] == 1.:            # hard-edge void
+            mask = q <= 1.
+            nevN_v    = np.where(mask, nev[j], nevN_v)
+            FvN_v     = np.where(mask, Fv[j],  FvN_v)
+            hitvoid_v = np.where(mask, j + 1,  hitvoid_v)
+
+    wvoid_v = (hitvoid_v != 0).astype(float)
+    return nevN_v, FvN_v, hitvoid_v, wvoid_v

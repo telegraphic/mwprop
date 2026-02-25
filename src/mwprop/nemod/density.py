@@ -242,3 +242,102 @@ def density_2001_smooth_comps(x, y, z, verbose=False):
     else:
         return ne_smooth
     """
+
+
+# ---------------------------------------------------------------------------
+
+def density_2001_smallscale_comps_vec(xvec, yvec, zvec, inds_relevant=None):
+    """
+    Vectorized counterpart of density_2001_smallscale_comps.
+
+    Accepts 1-D numpy arrays xvec, yvec, zvec (length Ns_fine) and returns
+    all small-scale component arrays in the same order as the scalar version,
+    so that the caller can unpack with:
+
+        negc, nelism, necN, nevN, Fgc, Flism, FcN, FvN, \\
+            wlism, wldr, wlhb, wlsb, wloopI, hitclump, hitvoid, wvoid = \\
+            density_2001_smallscale_comps_vec(xf_vec, yf_vec, zf_vec,
+                                              inds_relevant=...)
+    """
+    n = len(xvec)
+
+    negc_v    = np.zeros(n)
+    nelism_v  = np.zeros(n)
+    necN_v    = np.zeros(n)
+    nevN_v    = np.zeros(n)
+    Fgc_v     = np.zeros(n)
+    Flism_v   = np.zeros(n)
+    FcN_v     = np.zeros(n)
+    FvN_v     = np.zeros(n)
+    wlism_v   = np.zeros(n)
+    wldr_v    = np.zeros(n)
+    wlhb_v    = np.zeros(n)
+    wlsb_v    = np.zeros(n)
+    wloopI_v  = np.zeros(n)
+    hitclump_v = np.zeros(n, dtype=int)
+    hitvoid_v  = np.zeros(n, dtype=int)
+    wvoid_v    = np.zeros(n)
+
+    if wggc == 1:
+        negc_v, Fgc_v = ne_gc_vec(xvec, yvec, zvec)
+
+    if wglism == 1:
+        nelism_v, Flism_v, wlism_v, wldr_v, wlhb_v, wlsb_v, wloopI_v = \
+            ne_lism_vec(xvec, yvec, zvec)
+
+    if wgcN == 1:
+        necN_v, FcN_v, hitclump_v = neclumpN_vec(xvec, yvec, zvec,
+                                                  inds_relevant=inds_relevant)
+
+    if wgvN == 1:
+        nevN_v, FvN_v, hitvoid_v, wvoid_v = nevoidN_vec(xvec, yvec, zvec)
+
+    return (negc_v, nelism_v, necN_v, nevN_v,
+            Fgc_v, Flism_v, FcN_v, FvN_v,
+            wlism_v, wldr_v, wlhb_v, wlsb_v, wloopI_v,
+            hitclump_v, hitvoid_v, wvoid_v)
+
+
+# ---------------------------------------------------------------------------
+
+def density_2001_smooth_comps_vec(xvec, yvec, zvec):
+    """
+    Vectorized counterpart of density_2001_smooth_comps.
+
+    Accepts 1-D numpy arrays xvec, yvec, zvec (length Ns_coarse) and returns
+    all smooth-component arrays in the same order as the scalar version so the
+    caller can unpack with::
+
+        cne1, cne2, cnea, cF1, cF2, cFa, cwhicharm, cne_smooth, cFsmooth = \\
+            density_2001_smooth_comps_vec(xc_vec, yc_vec, zc_vec)
+    """
+    n = len(xvec)
+
+    ne1_v      = np.zeros(n)
+    ne2_v      = np.zeros(n)
+    nea_v      = np.zeros(n)
+    F1_v       = np.zeros(n)
+    F2_v       = np.zeros(n)
+    Fa_v       = np.zeros(n)
+    whicharm_v = np.zeros(n, dtype=int)
+
+    if wg1 == 1:
+        ne1_v, F1_v = ne_outer_vec(xvec, yvec, zvec)
+    if wg2 == 1:
+        ne2_v, F2_v = ne_inner_vec(xvec, yvec, zvec)
+    if wga == 1:
+        nea_v, Fa_v, whicharm_v = ne_arms_ne2001p_vec(xvec, yvec, zvec,
+                                                       Ncoarse=Ncoarse)
+
+    wne1 = wg1 * ne1_v
+    wne2 = wg2 * ne2_v
+    wnea = wga * nea_v
+    ne_smooth_v = wne1 + wne2 + wnea
+
+    # Fsmooth = (F1*ne1^2 + F2*ne2^2 + Fa*nea^2) / ne_smooth^2  where ne_smooth > 0
+    Fsmooth_v = np.where(
+        ne_smooth_v > 0.,
+        (F1_v * wne1**2 + F2_v * wne2**2 + Fa_v * wnea**2) / ne_smooth_v**2,
+        0.)
+
+    return ne1_v, ne2_v, nea_v, F1_v, F2_v, Fa_v, whicharm_v, ne_smooth_v, Fsmooth_v

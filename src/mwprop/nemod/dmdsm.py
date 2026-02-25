@@ -191,20 +191,8 @@ def dmdsm_dm2d(l, b, dm_target, ds_coarse=0.1, ds_fine=0.01, Nsmin=20,
         # ----------------------------------------------
         # Smooth, large-scale components on coarse grid:
         # ----------------------------------------------
-        # Note only cnd_smooth, cFsmooth needed here
-        cne1 = np.empty(Ns_coarse)
-        cne2 = np.empty(Ns_coarse)
-        cnea = np.empty(Ns_coarse)
-        cF1 = np.empty(Ns_coarse)
-        cF2 = np.empty(Ns_coarse)
-        cFa = np.empty(Ns_coarse)
-        cwhicharm = np.empty(Ns_coarse)
-        cne_smooth = np.empty(Ns_coarse)
-        cFsmooth = np.empty(Ns_coarse)
-        for j in range(Ns_coarse):
-            cne1[j], cne2[j], cnea[j], cF1[j], cF2[j], cFa[j], \
-                cwhicharm[j], cne_smooth[j], cFsmooth[j] = \
-                density_2001_smooth_comps(xc_vec[j], yc_vec[j], zc_vec[j])
+        cne1, cne2, cnea, cF1, cF2, cFa, cwhicharm, cne_smooth, cFsmooth = \
+            density_2001_smooth_comps_vec(xc_vec, yc_vec, zc_vec)
 
         # Spline functions:
         cs_ne_smooth = CubicSpline(sc_vec, cne_smooth)
@@ -221,28 +209,11 @@ def dmdsm_dm2d(l, b, dm_target, ds_coarse=0.1, ds_fine=0.01, Nsmin=20,
         # ------------------------------------
         # Small-scale components on fine grid:
         # ------------------------------------
-        negc = np.empty(Ns_fine)
-        nelism = np.empty(Ns_fine)
-        necN = np.empty(Ns_fine)
-        nevN = np.empty(Ns_fine)
-        Fgc = np.empty(Ns_fine)
-        Flism = np.empty(Ns_fine)
-        FcN = np.empty(Ns_fine)
-        FvN = np.empty(Ns_fine)
-        wlism = np.empty(Ns_fine)
-        wldr = np.empty(Ns_fine)
-        wlhb = np.empty(Ns_fine)
-        wlsb = np.empty(Ns_fine)
-        wloopI = np.empty(Ns_fine)
-        hitclump = np.empty(Ns_fine)
-        hitvoid = np.empty(Ns_fine)
-        wvoid = np.empty(Ns_fine)
-        for j in range(Ns_fine):
-            negc[j], nelism[j], necN[j], nevN[j], Fgc[j], Flism[j], FcN[j], FvN[j], \
-                wlism[j], wldr[j], wlhb[j], wlsb[j], wloopI[j], hitclump[j], hitvoid[j], \
-                wvoid[j] = density_2001_smallscale_comps(
-                    xf_vec[j], yf_vec[j], zf_vec[j], inds_relevant=relevant_clump_indices
-                )
+        negc, nelism, necN, nevN, Fgc, Flism, FcN, FvN, \
+            wlism, wldr, wlhb, wlsb, wloopI, hitclump, hitvoid, wvoid = \
+            density_2001_smallscale_comps_vec(
+                xf_vec, yf_vec, zf_vec, inds_relevant=relevant_clump_indices
+            )
 
         #if debug:
         #	print('hitvoid',hitvoid)
@@ -488,10 +459,8 @@ def dmdsm_d2dm(l, b, d_target, ds_coarse, ds_fine, Nsmin,
     # Smooth, large-scale components on coarse grid
     # ---------------------------------------------
     # Note only cnd_smooth, cFsmooth needed here:
-    cne1,cne2,cnea, cF1, cF2, cFa, cwhicharm, cne_smooth, cFsmooth = \
-        array([
-           density_2001_smooth_comps(xc_vec[j],yc_vec[j],zc_vec[j]) for j in range(Ns_coarse)
-        ]).T
+    cne1, cne2, cnea, cF1, cF2, cFa, cwhicharm, cne_smooth, cFsmooth = \
+        density_2001_smooth_comps_vec(xc_vec, yc_vec, zc_vec)
 
     # Spline functions:
     cs_ne_smooth = CubicSpline(sc_vec, cne_smooth)
@@ -509,13 +478,11 @@ def dmdsm_d2dm(l, b, d_target, ds_coarse, ds_fine, Nsmin,
     # Small-scale components on fine grid:
     # ------------------------------------
     # SKO -- tested changing inds_relevant to None from relevant_clump_indices
-    negc,nelism,necN,nevN, Fgc, Flism, FcN, FvN, wlism, wldr, wlhb, wlsb, wloopI, \
-       hitclump, hitvoid, wvoid = \
-           array([
-               density_2001_smallscale_comps(\
-                   xf_vec[j],yf_vec[j],zf_vec[j], inds_relevant=relevant_clump_indices) \
-                   for j in range(Ns_fine)\
-           ]).T
+    negc, nelism, necN, nevN, Fgc, Flism, FcN, FvN, wlism, wldr, wlhb, wlsb, wloopI, \
+        hitclump, hitvoid, wvoid = \
+        density_2001_smallscale_comps_vec(
+            xf_vec, yf_vec, zf_vec, inds_relevant=relevant_clump_indices
+        )
 
     wtotal = (1-wgvN*wvoid)*(1-wglism*wlism)        # used for SM calculations
     ne_ex_clumps_voids = (1.-wglism*wlism) * (ne_smooth + wggc*negc) + wglism*wlism*nelism

@@ -132,3 +132,42 @@ def ne_gc(x,y,z, absymax=2*rgc):
             F_gc = 0
 
     return ne_gc_out, F_gc
+
+
+# ---------------------------------------------------------------------------
+
+def ne_gc_vec(x, y, z, absymax=2*rgc):
+    """Vectorized (array) version of ne_gc.  x, y, z are 1-D numpy arrays."""
+    rr = np.sqrt((x - xgc)**2 + (y - ygc)**2)
+    zz = np.abs(z - zgc)
+    arg = (rr / rgc)**2 + (zz / hgc)**2
+    mask = (np.abs(y) <= absymax) & (rr <= rgc) & (zz <= hgc) & (arg <= 1)
+    negc_v = np.where(mask, negc0, 0.0)
+    Fgc_v  = np.where(mask, Fgc0,  0.0)
+    return negc_v, Fgc_v
+
+
+# ---------------------------------------------------------------------------
+
+def ne_outer_vec(x, y, z):
+    """Vectorized (array) version of ne_outer.  x, y, z are 1-D numpy arrays."""
+    rr = np.sqrt(x**2 + y**2)
+    suncos = np.cos(pihalf * rsun / A1)
+    g1 = np.where(rr > A1, 0.0, np.cos(pihalf * rr / A1) / suncos)
+    z_arg = np.abs(z / h1)
+    exp_2z = np.exp(-2.0 * z_arg)
+    sech2_val = 4.0 * exp_2z / (1.0 + exp_2z)**2
+    ne1 = (n1h1 / h1) * g1 * sech2_val
+    return ne1, np.full_like(ne1, F1)
+
+
+def ne_inner_vec(x, y, z):
+    """Vectorized (array) version of ne_inner.  x, y, z are 1-D numpy arrays."""
+    rr = np.sqrt(x**2 + y**2)
+    rrarg = ((rr - A2) / 1.8)**2
+    g2 = np.where(rrarg < 10.0, np.exp(-rrarg), 0.0)
+    z_arg = np.abs(z / h2)
+    exp_2z = np.exp(-2.0 * z_arg)
+    sech2_val = 4.0 * exp_2z / (1.0 + exp_2z)**2
+    ne2 = n2 * g2 * sech2_val
+    return ne2, np.full_like(ne2, F2)

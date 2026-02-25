@@ -153,3 +153,43 @@ def neclumpN(x,y,z, inds_relevant=None):
 
 
         return necN, FcN, hitclump, arg # SKO 3/6/22 -- added arg for debugging
+
+
+# ---------------------------------------------------------------------------
+
+def neclumpN_vec(x, y, z, inds_relevant=None):
+    """
+    Vectorized (array) version of neclumpN.
+
+    x, y, z are 1-D numpy arrays of positions.
+    Loops over the (few) relevant clumps; vectorizes over positions.
+
+    Returns (necN_v, FcN_v, hitclump_v) — all 1-D arrays of length len(x).
+    """
+    n = len(x)
+    necN_v     = np.zeros(n)
+    FcN_v      = np.zeros(n)
+    hitclump_v = np.zeros(n, dtype=int)
+
+    if inds_relevant is None:
+        clumpnums = range(nclumps)
+    else:
+        clumpnums = inds_relevant[0]
+
+    if np.isscalar(clumpnums) and clumpnums == -1:
+        return necN_v, FcN_v, hitclump_v
+
+    for j in clumpnums:
+        arg = ((x - xc[j])**2 + (y - yc[j])**2 + (z - zc[j])**2) / rc[j]**2
+        if edgec[j] == 0.:              # Gaussian clump
+            mask = arg < 5.
+            necN_v    += np.where(mask, nec[j] * exp(-arg), 0.0)
+            FcN_v      = np.where(mask, Fc[j],  FcN_v)
+            hitclump_v = np.where(mask, j,       hitclump_v)
+        elif edgec[j] == 1.:            # hard-edge clump
+            mask = arg <= 1.
+            necN_v    += np.where(mask, nec[j], 0.0)
+            FcN_v      = np.where(mask, Fc[j],  FcN_v)
+            hitclump_v = np.where(mask, j,       hitclump_v)
+
+    return necN_v, FcN_v, hitclump_v
